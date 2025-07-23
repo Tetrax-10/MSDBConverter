@@ -264,9 +264,6 @@ class Program
         {
             using (var image = new MagickImage(imagePath))
             {
-                // Automatically rotate the image based on its EXIF orientation
-                image.AutoOrient();
-
                 // Check if original is already a JPG and meets size & dimension requirements
                 bool isOriginalJpg = image.Format == MagickFormat.Jpg || image.Format == MagickFormat.Jpeg;
                 if (isOriginalJpg &&
@@ -274,10 +271,27 @@ class Program
                     image.Width <= targetMaxDimension &&
                     image.Height <= targetMaxDimension)
                 {
-                    // If so, simply copy the original image
-                    File.Copy(imagePath, outputFileName, true);
-                    return null;
+                    // Get EXIF orientation
+                    var imageOrientation = image.Orientation;
+                    // Get image orientation
+                    var exifOrientation = image.GetExifProfile()?.GetValue(ExifTag.Orientation)?.Value;
+
+                    // If orientation is normal just copy the file
+                    if ((imageOrientation == OrientationType.Undefined || imageOrientation == OrientationType.TopLeft) && (exifOrientation == null || exifOrientation == 1))
+                    {
+                        File.Copy(imagePath, outputFileName, true);
+                        return null;
+                    }
+                    
+                    // Otherwise fall through to processing with AutoOrient()
                 }
+
+                // Automatically rotate the image based on its EXIF orientation
+                image.AutoOrient();
+
+                var exifProfile = image.GetExifProfile() ?? new ExifProfile(); // Ensure profile exists
+                exifProfile.SetValue(ExifTag.Orientation, (ushort)1);
+                image.SetProfile(exifProfile); // Set EXIF orientation to "Normal"
 
                 // Resize the image if its width or height exceeds target
                 if (image.Width > targetMaxDimension || image.Height > targetMaxDimension)
