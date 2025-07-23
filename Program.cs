@@ -9,8 +9,11 @@ class Program
 {
     private const string DefaultLegacyInputFolderName = "ToConvert";
     private const string DefaultOutputSubfolderName = "Converted";
-    private const double MaxSizeInMB = 7.5;
-    private const int MaxDimension = 7500;
+    // [custom] changed these 4 variables to handle cli arguments
+    private const double DefaultMaxSizeInMB = 7.5;
+    private static double MaxSizeInMB = DefaultMaxSizeInMB;
+    private const int DefaultMaxDimension = 7500;
+    private static int MaxDimension = DefaultMaxDimension;
 
     static void Main(string[] args)
     {
@@ -57,7 +60,20 @@ class Program
         }
         else
         {
-            Console.WriteLine("Command-line arguments detected. These are currently ignored.");
+            // [custom] assign MaxSizeInMB and MaxDimension from cli argument(s)
+            foreach (var arg in args)
+            {
+                if (arg.EndsWith("MB", StringComparison.OrdinalIgnoreCase))
+                {
+                    double.TryParse(arg[..^2], out MaxSizeInMB);
+                }
+                else if (arg.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+                {
+                    int.TryParse(arg[..^2], out MaxDimension);
+                }
+            }
+
+            Console.WriteLine("Command-line arguments detected.");
             Console.WriteLine("Using CLI mode on the current working directory.");
             sourceDirectoryToProcess = currentWorkingDirectory;
             outputFolderFullPath = Path.Combine(currentWorkingDirectory, DefaultOutputSubfolderName);
