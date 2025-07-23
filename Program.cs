@@ -143,9 +143,10 @@ class Program
             if (!Directory.Exists(outputConvertedFolderFullPath))
                 Directory.CreateDirectory(outputConvertedFolderFullPath);
 
-            string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-            string sessionFolderPath = Path.Combine(outputConvertedFolderFullPath, timestamp);
-            Directory.CreateDirectory(sessionFolderPath);
+            // [custom] Commenting these as I don't want outputs in session folder
+            // string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            // string sessionFolderPath = Path.Combine(outputConvertedFolderFullPath, timestamp);
+            // Directory.CreateDirectory(sessionFolderPath);
 
             int totalFiles = imageFiles.Length;
             int processedFiles = 0;
@@ -166,7 +167,8 @@ class Program
                 string warningMessage = null; 
                 try
                 {
-                    warningMessage = ConvertToJpgOrCopyOptimized(imageFile, sessionFolderPath, MaxSizeInMB, MaxDimension);
+                    // [custom] changed sessionFolderPath to outputConvertedFolderFullPath so the ouputs are generated in the ./Converted folder
+                    warningMessage = ConvertToJpgOrCopyOptimized(imageFile, outputConvertedFolderFullPath, MaxSizeInMB, MaxDimension);
                     success = true;
                 }
                 catch (Exception ex)
@@ -207,7 +209,8 @@ class Program
             Console.WriteLine($"\n--- Conversion Summary ---");
             Console.WriteLine($"Successfully converted: {successCount} file(s)");
             Console.WriteLine($"Failed to convert:    {errorCount} file(s)");
-            Console.WriteLine($"Output folder:          '{sessionFolderPath}'");
+            // [custom] sessionFolderPath => outputConvertedFolderFullPath
+            Console.WriteLine($"Output folder:          '{outputConvertedFolderFullPath}'");
         }
         else
             Console.WriteLine($"No image files with supported extensions found in '{sourcePath}'.");
