@@ -241,83 +241,125 @@ class Program
                         .ToArray();
     }
     
+    // re-wrote ConvertToJpgOrCopyOptimized so it uses two segment binary search to find correct quality in less number of steps than normal linear search
     static string? ConvertToJpgOrCopyOptimized(string imagePath, string outputFolderPath, double targetMaxSizeMB, int targetMaxDimension)
     {
         string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(imagePath);
         string outputFileName = Path.Combine(outputFolderPath, fileNameWithoutExtension + ".jpg");
+
+        // Convert target max size from MB to bytes
         long targetMaxSizeBytes = (long)(targetMaxSizeMB * 1024 * 1024);
 
+        // Create a temporary file used to probe image size without overwriting the final output yet
+        string tempFile = Path.GetTempFileName();
+
         FileInfo originalFileInfo = new FileInfo(imagePath);
+
+        // Default to minimum quality; updated during binary search
+        int finalQuality = 50;
+
+        bool foundValidQuality = false;
 
         try
         {
             using (var image = new MagickImage(imagePath))
             {
+                // Automatically rotate the image based on its EXIF orientation
                 image.AutoOrient();
-                string originalExtension = Path.GetExtension(imagePath).ToLowerInvariant();
-                bool isOriginalJpg = (image.Format == MagickFormat.Jpg || image.Format == MagickFormat.Jpeg);
 
+                // Check if original is already a JPG and meets size & dimension requirements
+                bool isOriginalJpg = image.Format == MagickFormat.Jpg || image.Format == MagickFormat.Jpeg;
                 if (isOriginalJpg &&
                     originalFileInfo.Length <= targetMaxSizeBytes &&
                     image.Width <= targetMaxDimension &&
                     image.Height <= targetMaxDimension)
                 {
+                    // If so, simply copy the original image
                     File.Copy(imagePath, outputFileName, true);
                     return null;
                 }
 
+                // Resize the image if its width or height exceeds target
                 if (image.Width > targetMaxDimension || image.Height > targetMaxDimension)
                 {
                     image.Resize(new MagickGeometry((uint)targetMaxDimension, (uint)targetMaxDimension)
                     {
-                        IgnoreAspectRatio = false
+                        IgnoreAspectRatio = false // Keep aspect ratio intact
                     });
                 }
 
+                // Always convert final format to JPG
                 image.Format = MagickFormat.Jpg;
 
-                const int minQuality = 50;
-
-                for (int currentQuality = 100; currentQuality >= minQuality; currentQuality--)
+                // Try different quality ranges, starting from high to low inorder to find the best quality under the size limit
+                var ranges = new List<(int Low, int High)>
                 {
-                    image.Quality = (uint)currentQuality;
-                    image.Write(outputFileName);
+                    (91, 100), // Try best quality first (most likely will fall under size limit)
+                    (50, 90)   // Acceptable quality
+                };
 
-                    FileInfo outputFileInfo = new FileInfo(outputFileName);
-                    if (outputFileInfo.Length <= targetMaxSizeBytes)
-                        return null;
+                // Loop through each quality range
+                foreach (var (lowStart, highStart) in ranges)
+                {
+                    int low = lowStart;
+                    int high = highStart;
+
+                    // Perform binary search to find the highest quality under the size limit
+                    while (low <= high)
+                    {
+                        int mid = (low + high) / 2;
+
+                        image.Quality = (uint)mid;
+
+                        // Save a temporary copy with this quality setting
+                        image.Write(tempFile);
+
+                        long tempSize = new FileInfo(tempFile).Length;
+
+                        if (tempSize <= targetMaxSizeBytes)
+                        {
+                            // If file is under target size, try a higher quality
+                            finalQuality = mid;
+                            foundValidQuality = true;
+                            low = mid + 1;
+                        }
+                        else
+                        {
+                            // If file exceeds target, try a lower quality
+                            high = mid - 1;
+                        }
+                    }
+
+                    // If any valid quality found in this range, skip lower ranges
+                    if (foundValidQuality)
+                        break;
                 }
 
-                FileInfo finalAttemptFileInfo = new FileInfo(outputFileName);
-                string warningMessage =
-                    $"[WARN] File '{Path.GetFileName(imagePath)}': Could not achieve target size {targetMaxSizeMB}MB even at quality {minQuality}. " +
-                    $"File saved with quality {minQuality}, final size: {(double)finalAttemptFileInfo.Length / (1024 * 1024):F2}MB.";
-                return warningMessage;
+                // Write final image to output using the best quality found
+                image.Quality = (uint)finalQuality;
+                image.Write(outputFileName);
+
+                // Check final file size
+                long finalSize = new FileInfo(outputFileName).Length;
+                if (!foundValidQuality || finalSize > targetMaxSizeBytes)
+                {
+                    // Warn if we couldn't meet the size requirement even at minimum quality
+                    return $"[WARN] Best achievable quality for {Path.GetFileName(imagePath)} is {finalQuality} (size: {finalSize / (1024.0 * 1024):F2}MB)";
+                }
+
+                return null;
             }
         }
         catch (MagickException ex)
         {
-            if (File.Exists(outputFileName))
-            {
-                try
-                {
-                    File.Delete(outputFileName);
-                }
-                catch { }
-            }
-            throw new Exception($"ImageMagick error processing '{Path.GetFileName(imagePath)}': {ex.Message}", ex);
+            // Delete incomplete output if a Magick.NET error occurred
+            if (File.Exists(outputFileName)) File.Delete(outputFileName);
+            throw new Exception($"Processing failed: {ex.Message}", ex);
         }
-        catch (Exception)
+        finally
         {
-            if (File.Exists(outputFileName))
-            {
-                try
-                {
-                    File.Delete(outputFileName);
-                }
-                catch { }
-            }
-            throw;
+            // Always clean up temporary probe file
+            if (File.Exists(tempFile)) File.Delete(tempFile);
         }
     }
 }
