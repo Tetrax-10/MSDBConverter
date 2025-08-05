@@ -349,17 +349,15 @@ class Program
                         break;
                 }
 
-                // Write final image to output using the best quality found
                 image.Quality = (uint)finalQuality;
-                image.Write(outputFileName);
 
-                // Check final file size
-                long finalSize = new FileInfo(outputFileName).Length;
-                if (!foundValidQuality || finalSize > targetMaxSizeBytes)
+                if (!foundValidQuality)
                 {
-                    // Warn if we couldn't meet the size requirement even at minimum quality
-                    return $"[WARN] Best achievable quality for {Path.GetFileName(imagePath)} is {finalQuality} (size: {finalSize / (1024.0 * 1024):F2}MB)";
+                    // Use SetDefine extent to make sure the image always stays under size limit
+                    image.Settings.SetDefine(MagickFormat.Jpeg, "extent", $"{targetMaxSizeMB}MB");
                 }
+
+                image.Write(outputFileName);
 
                 return null;
             }
