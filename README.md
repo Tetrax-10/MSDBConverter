@@ -11,6 +11,7 @@
 
 -   **Uses two segment binary search** to determine best quality between 100 to 50. eg: quality 75 takes just **3** encodings instead of **25** 🤯.
 -   **Handles unsupported image orientations** (EXIF orientation) even for files that meets requirements.
+-   The ouput image is always less than `7.5MB` thus no file size errors.
 -   Images are directly created inside **`Converted`** folder instead of **`Converted/yyyy-MM-dd_HH-mm-ss`**.
 
 # MSDBConverter
@@ -25,6 +26,12 @@ This tool efficiently converts and compresses multiple images simultaneously to 
 ## Usage
 
 Download the [latest release](https://github.com/niccoloc0/MSDBConverter/releases) of the tool (MSDBConverter.exe) and place it in a folder of your choice. When you run the program, a 'ToConvert' folder will be created. Place the images you want to convert inside this folder and run the program again. The converted files will be placed in a newly created 'Converted' folder, which will contain another folder named with the current date and time. Inside this final folder, you'll find the converted images.
+
+## Local Build command
+
+```sh
+dotnet publish MSDBConverter.sln -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:AssemblyName=msdbc
+```
 
 ## Support
 
